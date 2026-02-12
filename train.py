@@ -1,17 +1,20 @@
 from stable_baselines3 import PPO
 from car_env import CarEnv
+import os
 
 # Створюємо середовище
 env = CarEnv()
 
-# Створюємо модель (мозок)
-# MlpPolicy - це тип нейромережі, яка підходить для наших 5 сенсорів
-model = PPO("MlpPolicy", env, verbose=1)
+# Створюємо модель
+# Використовуємо вищий learning_rate для швидкого навчання за 20 хв
+model = PPO("MlpPolicy", env, verbose=1, learning_rate=0.0005)
 
-print("Навчання почалося... AI зараз почне робити тисячі спроб.")
-# Навчаємо 100 000 кроків. Це приблизно 2-5 хвилин на звичайному ноуті.
-model.learn(total_timesteps=100000)
+print("--- НАВЧАННЯ РОЗПОЧАТО ---")
+print("AI вчиться керувати за допомогою 5 сенсорів...")
 
-# Зберігаємо "інтелект" у файл
+# 200,000 кроків - це приблизно 15-20 хвилин на середньому ПК
+model.learn(total_timesteps=200000)
+
+# Зберігаємо результат
 model.save("trained_car_model")
-print("Готово! AI навчився. Тепер можна запускати демо.")
+print("--- ГОТОВО! Модель збережена як trained_car_model.zip ---")

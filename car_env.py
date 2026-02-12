@@ -7,7 +7,9 @@ import math
 class CarEnv(gym.Env):
     def __init__(self):
         super(CarEnv, self).__init__()
+        # Дії: 0: Вліво, 1: Вправо, 2: Газ, 3: Гальмо
         self.action_space = spaces.Discrete(4)
+        # 5 променів-сенсорів
         self.observation_space = spaces.Box(low=0, high=1, shape=(5,), dtype=np.float32)
 
         pygame.init()
@@ -15,16 +17,19 @@ class CarEnv(gym.Env):
         self.screen = pygame.display.set_mode((self.width, self.height))
         self.clock = pygame.time.Clock()
         
-        # Траса
+        # Створення стабільної траси
         self.track = pygame.Surface((self.width, self.height))
-        self.track.fill((0, 0, 0))
-        pygame.draw.circle(self.track, (255, 255, 255), (400, 300), 250)
-        pygame.draw.circle(self.track, (0, 0, 0), (400, 300), 150)
+        self.track.fill((34, 139, 34)) # Трава (зелена)
+        # Малюємо дорогу (біле коло на чорному фоні)
+        pygame.draw.circle(self.track, (200, 200, 200), (400, 300), 250)
+        pygame.draw.circle(self.track, (34, 139, 34), (400, 300), 150)
+        # Асфальтова лінія
+        pygame.draw.circle(self.track, (50, 50, 50), (400, 300), 240, 80)
 
-        # Спрайт машинки (малюємо прямокутник, якщо немає файлу)
+        # Малюнок машинки
         self.car_img = pygame.Surface((30, 15), pygame.SRCALPHA)
-        pygame.draw.rect(self.car_img, (255, 200, 0), (0, 0, 30, 15), border_radius=3)
-        pygame.draw.rect(self.car_img, (0, 0, 0), (20, 2, 8, 11)) # Скло
+        pygame.draw.rect(self.car_img, (255, 50, 50), (0, 0, 30, 15), border_radius=3)
+        pygame.draw.rect(self.car_img, (50, 50, 80), (20, 2, 8, 11)) # Лобове скло
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -40,11 +45,12 @@ class CarEnv(gym.Env):
             dist = 0
             rad = math.radians(self.car_angle + a)
             while dist < 150:
-                dist += 2
+                dist += 3
                 x = int(self.car_pos[0] + math.cos(rad) * dist)
                 y = int(self.car_pos[1] - math.sin(rad) * dist)
                 if 0 <= x < 800 and 0 <= y < 600:
-                    if self.track.get_at((x, y))[0] == 0: break
+                    # Якщо колір НЕ асфальт (50, 50, 50) - це перешкода
+                    if self.track.get_at((x, y))[0] != 50: break
                 else: break
             distances.append(dist / 150.0)
         return np.array(distances, dtype=np.float32)
@@ -52,49 +58,43 @@ class CarEnv(gym.Env):
     def step(self, action):
         if action == 0: self.car_angle += 7
         if action == 1: self.car_angle -= 7
-        if action == 2: self.speed = min(self.speed + 0.3, 5)
-        if action == 3: self.speed = max(self.speed - 0.3, 0)
+        if action == 2: self.speed = min(self.speed + 0.4, 5.0)
+        if action == 3: self.speed = max(self.speed - 0.5, 0.0)
 
         rad = math.radians(self.car_angle)
         self.car_pos[0] += math.cos(rad) * self.speed
         self.car_pos[1] -= math.sin(rad) * self.speed
 
         obs = self._get_obs()
-        reward = self.speed * 0.5
+        # Винагорода за швидкість, якщо ми на трасі
+        reward = self.speed * 0.2
         done = False
         
         x, y = int(self.car_pos[0]), int(self.car_pos[1])
-        if x < 0 or x >= 800 or y < 0 or y >= 600 or self.track.get_at((x,y))[0] == 0:
+        if not (0 <= x < 800 and 0 <= y < 600) or self.track.get_at((x,y))[0] != 50:
             done = True
-            reward = -50
+            reward = -100 # Штраф за аварію
 
         return obs, reward, done, False, {}
 
     def render(self):
-        # Обробка подій, щоб вікно не зависало
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
+            if event.type == pygame.QUIT: pygame.quit()
 
-        self.screen.fill((50, 50, 50))
         self.screen.blit(self.track, (0, 0))
-
-        # ВІЗУАЛІЗАЦІЯ СЕНСОРІВ
+        # Малюємо сенсори
         obs = self._get_obs()
         angles = [-45, -22.5, 0, 22.5, 45]
         for i, a in enumerate(angles):
             rad = math.radians(self.car_angle + a)
             dist = obs[i] * 150
-            # Перетворюємо в int, щоб не було TypeError
-            start_p = (int(self.car_pos[0]), int(self.car_pos[1]))
             end_x = int(self.car_pos[0] + math.cos(rad) * dist)
             end_y = int(self.car_pos[1] - math.sin(rad) * dist)
-            pygame.draw.line(self.screen, (0, 255, 0), start_p, (end_x, end_y), 1)
+            pygame.draw.line(self.screen, (0, 255, 0), (int(self.car_pos[0]), int(self.car_pos[1])), (end_x, end_y), 1)
 
-        # МАШИНКА
+        # Малюємо машинку
         rotated_car = pygame.transform.rotate(self.car_img, self.car_angle)
         rect = rotated_car.get_rect(center=(int(self.car_pos[0]), int(self.car_pos[1])))
         self.screen.blit(rotated_car, rect.topleft)
-        
         pygame.display.flip()
         self.clock.tick(60)
